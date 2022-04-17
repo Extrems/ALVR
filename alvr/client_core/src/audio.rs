@@ -4,7 +4,7 @@ use alvr_session::AudioBufferingConfig;
 use alvr_sockets::{StreamReceiver, StreamSender};
 use oboe::{
     AudioInputCallback, AudioInputStreamSafe, AudioOutputCallback, AudioOutputStreamSafe,
-    AudioStream, AudioStreamBuilder, DataCallbackResult, InputPreset, Mono, PerformanceMode,
+    AudioStream, AudioStreamBuilder, DataCallbackResult, InputPreset, PerformanceMode,
     SampleRateConversionQuality, Stereo, Usage,
 };
 use std::{
@@ -20,17 +20,18 @@ struct RecorderCallback {
 }
 
 impl AudioInputCallback for RecorderCallback {
-    type FrameType = (i16, Mono);
+    type FrameType = (i16, Stereo);
 
     fn on_audio_ready(
         &mut self,
         _: &mut dyn AudioInputStreamSafe,
-        frames: &[i16],
+        frames: &[(i16, i16)],
     ) -> DataCallbackResult {
         let mut sample_buffer = Vec::with_capacity(frames.len() * mem::size_of::<i16>());
 
         for frame in frames {
-            sample_buffer.extend(&frame.to_ne_bytes());
+            let sample = frame.0.saturating_add(frame.1);
+            sample_buffer.extend(&sample.to_ne_bytes());
         }
 
         self.sender.send(sample_buffer).ok();
@@ -57,7 +58,7 @@ pub async fn record_audio_loop(
             .set_performance_mode(PerformanceMode::LowLatency)
             .set_sample_rate(sample_rate as _)
             .set_sample_rate_conversion_quality(SampleRateConversionQuality::Fastest)
-            .set_mono()
+            .set_stereo()
             .set_i16()
             .set_input()
             .set_usage(Usage::VoiceCommunication)
